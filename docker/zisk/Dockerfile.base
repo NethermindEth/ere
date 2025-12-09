@@ -13,6 +13,7 @@ FROM base${CUDA:+_cuda}
 # We operate as root for SDK and dependency installation.
 
 ARG CUDA
+ENV CUDA=${CUDA}
 
 # Install ZisK system dependencies (for Ubuntu)
 # Taken from https://0xpolygonhermez.github.io/zisk/getting_started/installation.html
