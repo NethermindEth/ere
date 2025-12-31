@@ -31,10 +31,6 @@ pub struct ClusterProverConfig {
     /// The gRPC endpoint URL of the cluster API service (e.g., http://localhost:50051)
     pub endpoint: String,
 
-    #[cfg_attr(feature = "clap", arg(long, env = "SP1_CLUSTER_API_KEY"))]
-    /// Optional API key for authentication
-    pub api_key: Option<String>,
-
     #[cfg_attr(feature = "clap", arg(long, env = "SP1_CLUSTER_REDIS_URL", default_value = "redis://:redispassword@127.0.0.1:6379/0"))]
     /// Redis URL for artifact storage (e.g., redis://:password@localhost:6379/0)
     pub redis_url: String,
@@ -48,12 +44,6 @@ impl ClusterProverConfig {
         if !self.endpoint.is_empty() {
             args.push("--endpoint".to_string());
             args.push(self.endpoint.clone());
-        }
-        if let Some(api_key) = &self.api_key {
-            if !api_key.is_empty() {
-                args.push("--api-key".to_string());
-                args.push(api_key.clone());
-            }
         }
         if !self.redis_url.is_empty() {
             args.push("--redis-url".to_string());
