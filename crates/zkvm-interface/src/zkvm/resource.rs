@@ -27,7 +27,7 @@ impl NetworkProverConfig {
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct ClusterProverConfig {
-    #[cfg_attr(feature = "clap", arg(long, env = "SP1_CLUSTER_ENDPOINT", default_value = ""))]
+    #[cfg_attr(feature = "clap", arg(long, env = "SP1_CLUSTER_ENDPOINT", default_value = "http://127.0.0.1:50051/"))]
     /// The gRPC endpoint URL of the cluster API service (e.g., http://localhost:50051)
     pub endpoint: String,
 
@@ -39,9 +39,9 @@ pub struct ClusterProverConfig {
     /// Number of GPUs to use for proving. If not set, uses all available GPUs.
     pub num_gpus: Option<u32>,
 
-    #[cfg_attr(feature = "clap", arg(long, env = "SP1_CLUSTER_REDIS_URL"))]
+    #[cfg_attr(feature = "clap", arg(long, env = "SP1_CLUSTER_REDIS_URL", default_value = "redis://:redispassword@127.0.0.1:6379/0"))]
     /// Redis URL for artifact storage (e.g., redis://:password@localhost:6379/0)
-    pub redis_url: Option<String>,
+    pub redis_url: String,
 }
 
 #[cfg(feature = "clap")]
@@ -66,11 +66,9 @@ impl ClusterProverConfig {
                 args.push(num_gpus.to_string());
             }
         }
-        if let Some(redis_url) = &self.redis_url {
-            if !redis_url.is_empty() {
-                args.push("--redis-url".to_string());
-                args.push(redis_url.clone());
-            }
+        if !self.redis_url.is_empty() {
+            args.push("--redis-url".to_string());
+            args.push(self.redis_url.clone());
         }
         args
     }
