@@ -14,17 +14,23 @@ pub mod cluster_proto {
 }
 
 use cluster_proto::{
-    cluster_service_client::ClusterServiceClient, ProofRequestCreateRequest,
-    ProofRequestGetRequest, ProofRequestStatus,
+    cluster_service_client::ClusterServiceClient, ExecutionFailureCause, ExecutionStatus,
+    ProofRequestCreateRequest, ProofRequestGetRequest, ProofRequestStatus,
 };
 
 /// Default timeout for proof generation (4 hours)
 const DEFAULT_TIMEOUT_SECS: u64 = 4 * 60 * 60;
 
+/// Polling interval configuration for exponential backoff
+const POLL_INITIAL_INTERVAL_MS: u64 = 500;
+const POLL_MAX_INTERVAL_MS: u64 = 10_000;
+const POLL_BACKOFF_MULTIPLIER: f64 = 1.5;
+
 /// SP1 Cluster client that uses gRPC API and Redis for artifact storage
 pub struct SP1ClusterClient {
     grpc_endpoint: String,
     redis_url: String,
+    runtime: tokio::runtime::Runtime,
 }
 
 impl SP1ClusterClient {
@@ -40,6 +46,9 @@ impl SP1ClusterClient {
             return Err(Error::RedisNotConfigured);
         }
 
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|e| Error::ClusterProve(format!("Failed to create tokio runtime: {}", e)))?;
+
         info!(
             "Created SP1 Cluster client: grpc={}, redis={}",
             grpc_endpoint, redis_url
@@ -48,7 +57,18 @@ impl SP1ClusterClient {
         Ok(Self {
             grpc_endpoint: grpc_endpoint.to_string(),
             redis_url: redis_url.to_string(),
+            runtime,
         })
+    }
+
+    /// Synchronous wrapper for prove that uses the internal runtime
+    pub fn prove_sync(
+        &self,
+        elf: &[u8],
+        stdin: &[u8],
+        mode: i32,
+    ) -> Result<ProveResult, Error> {
+        self.runtime.block_on(self.prove(elf, stdin, mode))
     }
 
     /// Connect to the gRPC service
@@ -144,6 +164,21 @@ impl SP1ClusterClient {
         Ok(data)
     }
 
+    /// Delete artifacts from Redis to clean up after proving
+    async fn cleanup_artifacts(
+        &self,
+        conn: &mut redis::aio::MultiplexedConnection,
+        artifact_ids: &[&str],
+    ) {
+        for artifact_id in artifact_ids {
+            // Try to delete both the simple key and chunks key
+            let chunks_key = format!("{}:chunks", artifact_id);
+            let _: Result<(), _> = conn.del::<_, ()>(*artifact_id).await;
+            let _: Result<(), _> = conn.del::<_, ()>(&chunks_key).await;
+        }
+        debug!("Cleaned up {} artifacts from Redis", artifact_ids.len());
+    }
+
     /// Submit a proof request and wait for completion
     pub async fn prove(
         &self,
@@ -183,8 +218,8 @@ impl SP1ClusterClient {
 
         grpc.proof_request_create(ProofRequestCreateRequest {
             proof_id: request_id.clone(),
-            program_artifact_id: program_id,
-            stdin_artifact_id: stdin_id,
+            program_artifact_id: program_id.clone(),
+            stdin_artifact_id: stdin_id.clone(),
             options_artifact_id: Some(mode.to_string()),
             proof_artifact_id: Some(proof_id.clone()),
             requester: vec![],
@@ -195,10 +230,14 @@ impl SP1ClusterClient {
         .await
         .map_err(|e| Error::GrpcRequest(e.to_string()))?;
 
-        // Poll for completion
+        // Poll for completion with exponential backoff
         let start = std::time::Instant::now();
+        let mut poll_interval_ms = POLL_INITIAL_INTERVAL_MS;
         loop {
             if SystemTime::now() > deadline {
+                // Cleanup uploaded artifacts before returning error
+                self.cleanup_artifacts(&mut redis, &[&program_id, &stdin_id])
+                    .await;
                 return Err(Error::ProveTimeout(DEFAULT_TIMEOUT_SECS));
             }
 
@@ -229,6 +268,11 @@ impl SP1ClusterClient {
                         let proof_data =
                             self.download_artifact(&mut redis, actual_proof_id).await?;
 
+                        // Cleanup uploaded artifacts (program, stdin)
+                        // Note: We don't clean up the proof artifact as it might be needed by the cluster
+                        self.cleanup_artifacts(&mut redis, &[&program_id, &stdin_id])
+                            .await;
+
                         // Get execution result
                         let (cycles, public_values_hash) =
                             if let Some(exec) = proof_request.execution_result {
@@ -246,15 +290,8 @@ impl SP1ClusterClient {
                     }
                     ProofRequestStatus::ProofRequestStatusFailed
                     | ProofRequestStatus::ProofRequestStatusCancelled => {
-                        // Build status string
-                        let status_str = match proof_request.proof_status {
-                            0 => "UNSPECIFIED".to_string(),
-                            1 => "PENDING".to_string(),
-                            2 => "COMPLETED".to_string(),
-                            3 => "FAILED".to_string(),
-                            4 => "CANCELLED".to_string(),
-                            _ => format!("UNKNOWN({})", proof_request.proof_status),
-                        };
+                        // Use proto enum for status display
+                        let status_str = status.as_str_name();
 
                         let elapsed = start.elapsed();
 
@@ -266,29 +303,16 @@ impl SP1ClusterClient {
 
                         // Add execution details
                         if let Some(exec) = &proof_request.execution_result {
-                            let exec_status_str = match exec.status {
-                                0 => "UNSPECIFIED",
-                                1 => "UNEXECUTED",
-                                2 => "EXECUTED",
-                                3 => "FAILED",
-                                4 => "CANCELLED",
-                                _ => "UNKNOWN",
-                            };
-                            let failure_cause_str = match exec.failure_cause {
-                                0 => "UNSPECIFIED",
-                                1 => "HALT_WITH_NON_ZERO_EXIT_CODE",
-                                2 => "INVALID_MEMORY_ACCESS",
-                                3 => "UNSUPPORTED_SYSCALL",
-                                4 => "BREAKPOINT",
-                                5 => "EXCEEDED_CYCLE_LIMIT",
-                                6 => "INVALID_SYSCALL_USAGE",
-                                7 => "UNIMPLEMENTED",
-                                8 => "END_IN_UNCONSTRAINED",
-                                _ => "UNKNOWN",
-                            };
+                            let exec_status = ExecutionStatus::try_from(exec.status)
+                                .unwrap_or(ExecutionStatus::ExecutionStatusUnspecified);
+                            let failure_cause = ExecutionFailureCause::try_from(exec.failure_cause)
+                                .unwrap_or(ExecutionFailureCause::ExecutionFailureCauseUnspecified);
                             error_msg.push_str(&format!(
                                 " - Execution: status={}, failure_cause={}, cycles={}, gas={}",
-                                exec_status_str, failure_cause_str, exec.cycles, exec.gas
+                                exec_status.as_str_name(),
+                                failure_cause.as_str_name(),
+                                exec.cycles,
+                                exec.gas
                             ));
                         } else {
                             error_msg.push_str(
@@ -301,13 +325,20 @@ impl SP1ClusterClient {
                             error_msg.push_str(&format!(" - metadata: {}", proof_request.metadata));
                         }
 
+                        // Cleanup uploaded artifacts before returning error
+                        self.cleanup_artifacts(&mut redis, &[&program_id, &stdin_id])
+                            .await;
+
                         return Err(Error::ClusterProve(error_msg));
                     }
                     _ => {}
                 }
             }
 
-            sleep(Duration::from_millis(500)).await;
+            // Exponential backoff: increase interval up to max
+            sleep(Duration::from_millis(poll_interval_ms)).await;
+            poll_interval_ms = ((poll_interval_ms as f64 * POLL_BACKOFF_MULTIPLIER) as u64)
+                .min(POLL_MAX_INTERVAL_MS);
         }
     }
 }

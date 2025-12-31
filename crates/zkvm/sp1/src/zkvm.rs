@@ -13,14 +13,21 @@ use std::{
 };
 use tracing::info;
 
-#[cfg(feature = "cluster")]
 pub mod cluster;
 mod error;
 mod sdk;
 
 pub use error::Error;
-#[cfg(feature = "cluster")]
 pub use cluster::SP1ClusterClient;
+
+/// SP1 Network/Cluster proof mode constants
+/// These match sp1_sdk::network::proto::types::ProofMode enum values
+pub mod proof_mode {
+    pub const CORE: i32 = 1;
+    pub const COMPRESSED: i32 = 2;
+    pub const PLONK: i32 = 3;
+    pub const GROTH16: i32 = 4;
+}
 
 include!(concat!(env!("OUT_DIR"), "/name_and_sdk_version.rs"));
 
@@ -44,7 +51,7 @@ pub struct EreSP1 {
 
 impl EreSP1 {
     pub fn new(program: SP1Program, resource: ProverResourceType) -> Result<Self, Error> {
-        let prover = Prover::new(&resource);
+        let prover = Prover::new(&resource)?;
         let (pk, vk) = prover.setup(&program.elf);
         Ok(Self {
             program,
@@ -63,8 +70,7 @@ impl EreSP1 {
         self.prover.write().map_err(|_| Error::RwLockPosioned)
     }
 
-    /// Prove via the cluster (only available with cluster feature)
-    #[cfg(feature = "cluster")]
+    /// Prove via the cluster
     fn prove_via_cluster(
         &self,
         input: &Input,
@@ -77,11 +83,9 @@ impl EreSP1 {
             proof_kind,
         );
 
-        // ProofMode values from sp1_sdk::network::proto::types::ProofMode
-        // Core = 1, Compressed = 2, Plonk = 3, Groth16 = 4
         let mode = match proof_kind {
-            ProofKind::Compressed => 2, // COMPRESSED mode
-            ProofKind::Groth16 => 4,    // GROTH16 mode
+            ProofKind::Compressed => proof_mode::COMPRESSED,
+            ProofKind::Groth16 => proof_mode::GROTH16,
         };
 
         // Serialize stdin in SP1 format using bincode 1.x (must match sp1-cluster's bincode version)
@@ -153,7 +157,6 @@ impl zkVM for EreSP1 {
         info!("Generating proof…");
 
         // Handle cluster proving separately
-        #[cfg(feature = "cluster")]
         if self.prover()?.is_cluster() {
             return self.prove_via_cluster(input, proof_kind);
         }
@@ -175,7 +178,8 @@ impl zkVM for EreSP1 {
                     // Note that `take` has to be done explicitly first so the
                     // Moongate container could be removed properly.
                     take(&mut *prover);
-                    *prover = Prover::new(&self.resource);
+                    *prover = Prover::new(&self.resource)
+                        .expect("Failed to recreate prover after panic recovery");
                 }
 
                 Error::Panic(panic_msg(err))
@@ -346,7 +350,6 @@ mod tests {
         run_zkvm_prove(&zkvm, &test_case);
     }
 
-    #[cfg(feature = "cluster")]
     #[test]
     #[ignore = "Requires SP1_CLUSTER_ENDPOINT environment variable to be set"]
     fn test_prove_sp1_cluster() {

@@ -20,38 +20,27 @@ sp1-sdk = { workspace = true, optional = true }
 ere-compile-utils = { workspace = true, optional = true }
 ere-zkvm-interface.workspace = true
 
-# Cluster dependencies (optional, behind 'cluster' feature)
-prost = { workspace = true, optional = true }
-redis = { workspace = true, features = ["tokio-comp", "cluster-async"], optional = true }
-tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"], optional = true }
-tonic = { workspace = true, optional = true }
-ulid = { workspace = true, optional = true }
-zstd = { workspace = true, optional = true }
+# Cluster dependencies
+prost.workspace = true
+redis = { workspace = true, features = ["tokio-comp", "cluster-async"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+tonic.workspace = true
+ulid.workspace = true
+zstd.workspace = true
 # bincode 1.x for deserializing proofs from SP1 Cluster (cluster uses bincode 1.x)
-bincode1 = { package = "bincode", version = "1.3", optional = true }
+bincode1 = { package = "bincode", version = "1.3" }
 
 [dev-dependencies]
 ere-test-utils = { workspace = true, features = ["host"] }
 
 [build-dependencies]
 ere-build-utils.workspace = true
-tonic-build = { version = "0.12", optional = true }
+tonic-build = "0.12"
 
 [features]
 default = ["compiler", "zkvm"]
 compiler = ["dep:ere-compile-utils"]
 zkvm = ["dep:sp1-sdk"]
-cluster = [
-    "zkvm",
-    "dep:prost",
-    "dep:redis",
-    "dep:tokio",
-    "dep:tonic",
-    "dep:ulid",
-    "dep:zstd",
-    "dep:bincode1",
-    "dep:tonic-build",
-]
 
 [lints]
 workspace = true

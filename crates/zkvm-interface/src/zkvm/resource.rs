@@ -15,16 +15,23 @@ pub struct NetworkProverConfig {
 
 #[cfg(feature = "clap")]
 impl NetworkProverConfig {
-    pub fn to_args(&self) -> Vec<&str> {
-        core::iter::once(["--endpoint", self.endpoint.as_str()])
-            .chain(self.api_key.as_deref().map(|val| ["--api-key", val]))
-            .flatten()
-            .collect()
+    pub fn to_args(&self) -> Vec<String> {
+        let mut args = Vec::new();
+        if !self.endpoint.is_empty() {
+            args.push("--endpoint".to_string());
+            args.push(self.endpoint.clone());
+        }
+        if let Some(api_key) = &self.api_key {
+            args.push("--api-key".to_string());
+            args.push(api_key.clone());
+        }
+        args
     }
 }
 
 /// Configuration for cluster-based proving (e.g., SP1 Cluster)
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 #[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct ClusterProverConfig {
     #[cfg_attr(feature = "clap", arg(long, env = "SP1_CLUSTER_ENDPOINT", default_value = "http://127.0.0.1:50051/"))]
@@ -73,7 +80,7 @@ impl ProverResourceType {
             Self::Cpu => vec!["cpu".to_string()],
             Self::Gpu => vec!["gpu".to_string()],
             Self::Network(config) => core::iter::once("network".to_string())
-                .chain(config.to_args().into_iter().map(|s| s.to_string()))
+                .chain(config.to_args())
                 .collect(),
             Self::Cluster(config) => core::iter::once("cluster".to_string())
                 .chain(config.to_args())
