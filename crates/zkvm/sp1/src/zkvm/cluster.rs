@@ -28,7 +28,6 @@ pub const DEFAULT_REDIS_URL: &str = "redis://:redispassword@127.0.0.1:6379/0";
 pub struct SP1ClusterClient {
     grpc_endpoint: String,
     redis_url: String,
-    num_gpus: Option<u32>,
 }
 
 impl SP1ClusterClient {
@@ -36,7 +35,6 @@ impl SP1ClusterClient {
     pub fn new(
         grpc_endpoint: &str,
         redis_url: &str,
-        num_gpus: Option<u32>,
     ) -> Result<Self, Error> {
         if grpc_endpoint.is_empty() {
             return Err(Error::EndpointNotConfigured);
@@ -46,14 +44,13 @@ impl SP1ClusterClient {
         }
 
         info!(
-            "Created SP1 Cluster client: grpc={}, redis={}, num_gpus={:?}",
-            grpc_endpoint, redis_url, num_gpus
+            "Created SP1 Cluster client: grpc={}, redis={}",
+            grpc_endpoint, redis_url
         );
 
         Ok(Self {
             grpc_endpoint: grpc_endpoint.to_string(),
             redis_url: redis_url.to_string(),
-            num_gpus,
         })
     }
 
@@ -315,11 +312,6 @@ impl SP1ClusterClient {
 
             sleep(Duration::from_millis(500)).await;
         }
-    }
-
-    /// Returns the number of GPUs configured
-    pub fn num_gpus(&self) -> Option<u32> {
-        self.num_gpus
     }
 
     /// Returns the gRPC endpoint

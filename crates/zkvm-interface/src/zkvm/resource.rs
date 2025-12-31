@@ -36,10 +36,6 @@ pub struct ClusterProverConfig {
     /// Optional API key for authentication
     pub api_key: Option<String>,
 
-    #[cfg_attr(feature = "clap", arg(long, env = "SP1_CLUSTER_NUM_GPUS"))]
-    /// Number of GPUs to use for proving. If not set, uses all available GPUs.
-    pub num_gpus: Option<u32>,
-
     #[cfg_attr(feature = "clap", arg(long, env = "SP1_CLUSTER_REDIS_URL", default_value = "redis://:redispassword@127.0.0.1:6379/0"))]
     /// Redis URL for artifact storage (e.g., redis://:password@localhost:6379/0)
     pub redis_url: String,
@@ -58,13 +54,6 @@ impl ClusterProverConfig {
             if !api_key.is_empty() {
                 args.push("--api-key".to_string());
                 args.push(api_key.clone());
-            }
-        }
-        // Only add num_gpus if it's Some and > 0
-        if let Some(num_gpus) = self.num_gpus {
-            if num_gpus > 0 {
-                args.push("--num-gpus".to_string());
-                args.push(num_gpus.to_string());
             }
         }
         if !self.redis_url.is_empty() {
