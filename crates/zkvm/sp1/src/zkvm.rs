@@ -359,10 +359,7 @@ mod tests {
         }
 
         // Create a cluster prover configuration
-        let cluster_config = ClusterProverConfig {
-            num_gpus: Some(4),
-            ..Default::default()
-        };
+        let cluster_config = ClusterProverConfig::default();
         let program = basic_program();
         let zkvm = EreSP1::new(program, ProverResourceType::Cluster(cluster_config)).unwrap();
 

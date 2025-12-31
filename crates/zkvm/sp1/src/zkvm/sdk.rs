@@ -44,22 +44,15 @@ impl Prover {
                     config.endpoint.clone()
                 };
 
-                // Get num_gpus from config or environment
-                let num_gpus = config.num_gpus.or_else(|| {
-                    env::var("SP1_CLUSTER_NUM_GPUS")
-                        .ok()
-                        .filter(|s| !s.is_empty())
-                        .and_then(|s| s.parse().ok())
-                });
-
                 // Get redis_url from config or environment
-                let redis_url = config
-                    .redis_url
-                    .clone()
-                    .or_else(|| env::var("SP1_CLUSTER_REDIS_URL").ok())
-                    .unwrap_or_else(|| DEFAULT_REDIS_URL.to_string());
+                let redis_url = if config.redis_url.is_empty() {
+                    env::var("SP1_CLUSTER_REDIS_URL")
+                        .unwrap_or_else(|_| DEFAULT_REDIS_URL.to_string())
+                } else {
+                    config.redis_url.clone()
+                };
 
-                let client = SP1ClusterClient::new(&endpoint, &redis_url, num_gpus)
+                let client = SP1ClusterClient::new(&endpoint, &redis_url)
                     .expect("Failed to create SP1 Cluster client");
 
                 Self::Cluster {
