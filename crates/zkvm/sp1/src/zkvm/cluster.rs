@@ -21,9 +21,6 @@ use cluster_proto::{
 /// Default timeout for proof generation (4 hours)
 const DEFAULT_TIMEOUT_SECS: u64 = 4 * 60 * 60;
 
-/// Default Redis URL for local development
-pub const DEFAULT_REDIS_URL: &str = "redis://:redispassword@127.0.0.1:6379/0";
-
 /// SP1 Cluster client that uses gRPC API and Redis for artifact storage
 pub struct SP1ClusterClient {
     grpc_endpoint: String,
@@ -312,16 +309,6 @@ impl SP1ClusterClient {
 
             sleep(Duration::from_millis(500)).await;
         }
-    }
-
-    /// Returns the gRPC endpoint
-    pub fn endpoint(&self) -> &str {
-        &self.grpc_endpoint
-    }
-
-    /// Returns the Redis URL
-    pub fn redis_url(&self) -> &str {
-        &self.redis_url
     }
 }
 
