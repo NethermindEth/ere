@@ -34,25 +34,7 @@ impl Prover {
             ProverResourceType::Network(config) => Self::Network(build_network_prover(config)),
             #[cfg(feature = "cluster")]
             ProverResourceType::Cluster(config) => {
-                use crate::zkvm::cluster::DEFAULT_REDIS_URL;
-                use std::env;
-
-                // Get endpoint from config or environment
-                let endpoint = if config.endpoint.is_empty() {
-                    env::var("SP1_CLUSTER_ENDPOINT").unwrap_or_default()
-                } else {
-                    config.endpoint.clone()
-                };
-
-                // Get redis_url from config or environment
-                let redis_url = if config.redis_url.is_empty() {
-                    env::var("SP1_CLUSTER_REDIS_URL")
-                        .unwrap_or_else(|_| DEFAULT_REDIS_URL.to_string())
-                } else {
-                    config.redis_url.clone()
-                };
-
-                let client = SP1ClusterClient::new(&endpoint, &redis_url)
+                let client = SP1ClusterClient::new(&config.endpoint, &config.redis_url)
                     .expect("Failed to create SP1 Cluster client");
 
                 Self::Cluster {
