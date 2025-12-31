@@ -1,4 +1,6 @@
 use crate::zkvm::Error;
+#[cfg(feature = "cluster")]
+use crate::zkvm::cluster::{ProveResult as ClusterProveResult, SP1ClusterClient};
 use ere_zkvm_interface::zkvm::{NetworkProverConfig, ProverResourceType};
 use sp1_sdk::{
     CpuProver, CudaProver, NetworkProver, Prover as _, ProverClient, SP1ProofMode,
@@ -10,6 +12,12 @@ pub enum Prover {
     Cpu(CpuProver),
     Gpu(CudaProver),
     Network(NetworkProver),
+    /// Cluster prover uses a separate SP1ClusterClient with a local CpuProver for verification
+    #[cfg(feature = "cluster")]
+    Cluster {
+        client: SP1ClusterClient,
+        local_prover: CpuProver,
+    },
 }
 
 impl Default for Prover {
@@ -24,6 +32,47 @@ impl Prover {
             ProverResourceType::Cpu => Self::Cpu(ProverClient::builder().cpu().build()),
             ProverResourceType::Gpu => Self::Gpu(ProverClient::builder().cuda().build()),
             ProverResourceType::Network(config) => Self::Network(build_network_prover(config)),
+            #[cfg(feature = "cluster")]
+            ProverResourceType::Cluster(config) => {
+                use crate::zkvm::cluster::DEFAULT_REDIS_URL;
+                use std::env;
+
+                // Get endpoint from config or environment
+                let endpoint = if config.endpoint.is_empty() {
+                    env::var("SP1_CLUSTER_ENDPOINT").unwrap_or_default()
+                } else {
+                    config.endpoint.clone()
+                };
+
+                // Get num_gpus from config or environment
+                let num_gpus = config.num_gpus.or_else(|| {
+                    env::var("SP1_CLUSTER_NUM_GPUS")
+                        .ok()
+                        .filter(|s| !s.is_empty())
+                        .and_then(|s| s.parse().ok())
+                });
+
+                // Get redis_url from config or environment
+                let redis_url = config
+                    .redis_url
+                    .clone()
+                    .or_else(|| env::var("SP1_CLUSTER_REDIS_URL").ok())
+                    .unwrap_or_else(|| DEFAULT_REDIS_URL.to_string());
+
+                let client = SP1ClusterClient::new(&endpoint, &redis_url, num_gpus)
+                    .expect("Failed to create SP1 Cluster client");
+
+                Self::Cluster {
+                    client,
+                    local_prover: ProverClient::builder().cpu().build(),
+                }
+            }
+            #[cfg(not(feature = "cluster"))]
+            ProverResourceType::Cluster(_) => {
+                panic!(
+                    "Cluster proving requires the 'cluster' feature. Enable it in Cargo.toml."
+                );
+            }
         }
     }
 
@@ -32,6 +81,8 @@ impl Prover {
             Self::Cpu(cpu_prover) => cpu_prover.setup(elf),
             Self::Gpu(cuda_prover) => cuda_prover.setup(elf),
             Self::Network(network_prover) => network_prover.setup(elf),
+            #[cfg(feature = "cluster")]
+            Self::Cluster { local_prover, .. } => local_prover.setup(elf),
         }
     }
 
@@ -44,6 +95,11 @@ impl Prover {
             Self::Cpu(cpu_prover) => cpu_prover.execute(elf, input).run(),
             Self::Gpu(cuda_prover) => cuda_prover.execute(elf, input).run(),
             Self::Network(network_prover) => network_prover.execute(elf, input).run(),
+            #[cfg(feature = "cluster")]
+            Self::Cluster { local_prover, .. } => {
+                // Execute locally - cluster is for proving only
+                local_prover.execute(elf, input).run()
+            }
         }
         .map_err(Error::Execute)
     }
@@ -55,11 +111,48 @@ impl Prover {
         mode: SP1ProofMode,
     ) -> Result<SP1ProofWithPublicValues, Error> {
         match self {
-            Self::Cpu(cpu_prover) => cpu_prover.prove(pk, input).mode(mode).run(),
-            Self::Gpu(cuda_prover) => cuda_prover.prove(pk, input).mode(mode).run(),
-            Self::Network(network_prover) => network_prover.prove(pk, input).mode(mode).run(),
+            Self::Cpu(cpu_prover) => cpu_prover.prove(pk, input).mode(mode).run().map_err(Error::Prove),
+            Self::Gpu(cuda_prover) => cuda_prover.prove(pk, input).mode(mode).run().map_err(Error::Prove),
+            Self::Network(network_prover) => network_prover.prove(pk, input).mode(mode).run().map_err(Error::Prove),
+            #[cfg(feature = "cluster")]
+            Self::Cluster { .. } => {
+                // This method shouldn't be called for cluster - use prove_cluster instead
+                Err(Error::ClusterProve(
+                    "Use prove_cluster() for cluster proving".to_string(),
+                ))
+            }
         }
-        .map_err(Error::Prove)
+    }
+
+    /// Prove using the cluster (only available with cluster feature)
+    #[cfg(feature = "cluster")]
+    pub fn prove_cluster(
+        &self,
+        elf: &[u8],
+        stdin_bytes: &[u8],
+        mode: i32,
+    ) -> Result<ClusterProveResult, Error> {
+        match self {
+            Self::Cluster { client, .. } => {
+                tokio::runtime::Runtime::new()
+                    .map_err(|e| Error::ClusterProve(format!("Failed to create runtime: {}", e)))?
+                    .block_on(client.prove(elf, stdin_bytes, mode))
+            }
+            _ => Err(Error::ClusterProve(
+                "prove_cluster is only available for Cluster prover".to_string(),
+            )),
+        }
+    }
+
+    /// Check if this is a cluster prover
+    #[cfg(feature = "cluster")]
+    pub fn is_cluster(&self) -> bool {
+        matches!(self, Self::Cluster { .. })
+    }
+
+    #[cfg(not(feature = "cluster"))]
+    pub fn is_cluster(&self) -> bool {
+        false
     }
 
     pub fn verify(
@@ -71,6 +164,11 @@ impl Prover {
             Self::Cpu(cpu_prover) => cpu_prover.verify(proof, vk),
             Self::Gpu(cuda_prover) => cuda_prover.verify(proof, vk),
             Self::Network(network_prover) => network_prover.verify(proof, vk),
+            #[cfg(feature = "cluster")]
+            Self::Cluster { local_prover, .. } => {
+                // Verify locally
+                local_prover.verify(proof, vk)
+            }
         }
         .map_err(Error::Verify)
     }
