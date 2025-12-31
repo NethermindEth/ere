@@ -30,4 +30,33 @@ pub enum Error {
 
     #[error("SP1 SDK verification failed: {0}")]
     Verify(#[source] SP1VerificationError),
+
+    // Cluster-specific errors
+    #[cfg(feature = "cluster")]
+    #[error("SP1 Cluster endpoint not configured. Set SP1_CLUSTER_ENDPOINT environment variable or provide endpoint in ClusterProverConfig")]
+    EndpointNotConfigured,
+
+    #[cfg(feature = "cluster")]
+    #[error("Redis URL not configured. Set SP1_CLUSTER_REDIS_URL environment variable")]
+    RedisNotConfigured,
+
+    #[cfg(feature = "cluster")]
+    #[error("Failed to connect to gRPC service: {0}")]
+    GrpcConnect(String),
+
+    #[cfg(feature = "cluster")]
+    #[error("gRPC request failed: {0}")]
+    GrpcRequest(String),
+
+    #[cfg(feature = "cluster")]
+    #[error("Redis error: {0}")]
+    Redis(String),
+
+    #[cfg(feature = "cluster")]
+    #[error("SP1 Cluster proving failed: {0}")]
+    ClusterProve(String),
+
+    #[cfg(feature = "cluster")]
+    #[error("SP1 Cluster proving timed out after {0} seconds")]
+    ProveTimeout(u64),
 }
