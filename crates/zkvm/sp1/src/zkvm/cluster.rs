@@ -30,7 +30,6 @@ const POLL_BACKOFF_MULTIPLIER: f64 = 1.5;
 pub struct SP1ClusterClient {
     grpc_endpoint: String,
     redis_url: String,
-    runtime: tokio::runtime::Runtime,
 }
 
 impl SP1ClusterClient {
@@ -46,9 +45,6 @@ impl SP1ClusterClient {
             return Err(Error::RedisNotConfigured);
         }
 
-        let runtime = tokio::runtime::Runtime::new()
-            .map_err(|e| Error::ClusterProve(format!("Failed to create tokio runtime: {}", e)))?;
-
         info!(
             "Created SP1 Cluster client: grpc={}, redis={}",
             grpc_endpoint, redis_url
@@ -57,18 +53,25 @@ impl SP1ClusterClient {
         Ok(Self {
             grpc_endpoint: grpc_endpoint.to_string(),
             redis_url: redis_url.to_string(),
-            runtime,
         })
     }
 
-    /// Synchronous wrapper for prove that uses the internal runtime
+    /// Synchronous wrapper for prove that creates a runtime on-demand
     pub fn prove_sync(
         &self,
         elf: &[u8],
         stdin: &[u8],
         mode: i32,
     ) -> Result<ProveResult, Error> {
-        self.runtime.block_on(self.prove(elf, stdin, mode))
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|e| Error::ClusterProve(format!("Failed to create tokio runtime: {}", e)))?;
+        let result = runtime.block_on(self.prove(elf, stdin, mode));
+
+        // Drop the runtime in a separate thread to avoid panic when
+        // called from within an async context (e.g., inside another block_on)
+        std::thread::spawn(move || drop(runtime));
+
+        result
     }
 
     /// Connect to the gRPC service
