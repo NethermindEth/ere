@@ -18,6 +18,12 @@ pub enum Prover {
     },
 }
 
+impl Default for Prover {
+    fn default() -> Self {
+        Self::Cpu(ProverClient::builder().cpu().build())
+    }
+}
+
 impl Prover {
     pub fn new(resource: &ProverResourceType) -> Result<Self, Error> {
         Ok(match resource {

@@ -14,18 +14,12 @@ pub struct NetworkProverConfig {
 }
 
 #[cfg(feature = "clap")]
-impl NetworkProverConfig {
-    pub fn to_args(&self) -> Vec<String> {
-        let mut args = Vec::new();
-        if !self.endpoint.is_empty() {
-            args.push("--endpoint".to_string());
-            args.push(self.endpoint.clone());
-        }
-        if let Some(api_key) = &self.api_key {
-            args.push("--api-key".to_string());
-            args.push(api_key.clone());
-        }
-        args
+impl NetworkProverConfig {   
+    pub fn to_args(&self) -> Vec<&str> {
+        core::iter::once(["--endpoint", self.endpoint.as_str()])
+            .chain(self.api_key.as_deref().map(|val| ["--api-key", val]))
+            .flatten()
+            .collect()
     }
 }
 
@@ -45,18 +39,11 @@ pub struct ClusterProverConfig {
 
 #[cfg(feature = "clap")]
 impl ClusterProverConfig {
-    pub fn to_args(&self) -> Vec<String> {
-        let mut args = Vec::new();
-        // Only add endpoint if it's not empty
-        if !self.endpoint.is_empty() {
-            args.push("--endpoint".to_string());
-            args.push(self.endpoint.clone());
-        }
-        if !self.redis_url.is_empty() {
-            args.push("--redis-url".to_string());
-            args.push(self.redis_url.clone());
-        }
-        args
+    pub fn to_args(&self) -> Vec<&str> {
+        core::iter::once(["--endpoint", self.endpoint.as_str()])
+            .chain(core::iter::once(["--redis-url", self.redis_url.as_str()]))
+            .flatten()
+            .collect()
     }
 }
 
@@ -75,16 +62,12 @@ pub enum ProverResourceType {
 
 #[cfg(feature = "clap")]
 impl ProverResourceType {
-    pub fn to_args(&self) -> Vec<String> {
+    pub fn to_args(&self) -> Vec<&str> {
         match self {
-            Self::Cpu => vec!["cpu".to_string()],
-            Self::Gpu => vec!["gpu".to_string()],
-            Self::Network(config) => core::iter::once("network".to_string())
-                .chain(config.to_args())
-                .collect(),
-            Self::Cluster(config) => core::iter::once("cluster".to_string())
-                .chain(config.to_args())
-                .collect(),
+            Self::Cpu => vec!["cpu"],
+            Self::Gpu => vec!["gpu"],
+            Self::Network(config) => core::iter::once("network").chain(config.to_args()).collect(),
+            Self::Cluster(config) => core::iter::once("cluster").chain(config.to_args()).collect(),
         }
     }
 }

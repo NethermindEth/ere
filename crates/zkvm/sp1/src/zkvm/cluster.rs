@@ -253,7 +253,7 @@ impl SP1ClusterClient {
                     ProofRequestStatus::try_from(proof_request.proof_status).unwrap_or_default();
 
                 match status {
-                    ProofRequestStatus::ProofRequestStatusCompleted => {
+                    ProofRequestStatus::Completed => {
                         info!("Proof completed in {:?}", start.elapsed());
 
                         // Get the actual proof artifact ID from the response
@@ -288,8 +288,7 @@ impl SP1ClusterClient {
                             proving_time: start.elapsed(),
                         });
                     }
-                    ProofRequestStatus::ProofRequestStatusFailed
-                    | ProofRequestStatus::ProofRequestStatusCancelled => {
+                    ProofRequestStatus::Failed | ProofRequestStatus::Cancelled => {
                         // Use proto enum for status display
                         let status_str = status.as_str_name();
 
@@ -304,9 +303,9 @@ impl SP1ClusterClient {
                         // Add execution details
                         if let Some(exec) = &proof_request.execution_result {
                             let exec_status = ExecutionStatus::try_from(exec.status)
-                                .unwrap_or(ExecutionStatus::ExecutionStatusUnspecified);
+                                .unwrap_or(ExecutionStatus::Unspecified);
                             let failure_cause = ExecutionFailureCause::try_from(exec.failure_cause)
-                                .unwrap_or(ExecutionFailureCause::ExecutionFailureCauseUnspecified);
+                                .unwrap_or(ExecutionFailureCause::Unspecified);
                             error_msg.push_str(&format!(
                                 " - Execution: status={}, failure_cause={}, cycles={}, gas={}",
                                 exec_status.as_str_name(),
