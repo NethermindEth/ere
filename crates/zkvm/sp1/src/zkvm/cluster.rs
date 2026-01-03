@@ -56,7 +56,7 @@ impl SP1ClusterClient {
     /// Synchronous wrapper for prove that creates a runtime on-demand
     pub fn prove_sync(&self, elf: &[u8], stdin: &[u8], mode: i32) -> Result<ProveResult, Error> {
         let runtime = tokio::runtime::Runtime::new()
-            .map_err(|e| Error::ClusterProve(format!("Failed to create tokio runtime: {}", e)))?;
+            .map_err(|e| Error::ClusterProve(format!("Failed to create tokio runtime: {e}")))?;
         let result = runtime.block_on(self.prove(elf, stdin, mode));
 
         // Drop the runtime in a separate thread to avoid panic when
@@ -97,7 +97,7 @@ impl SP1ClusterClient {
     ) -> Result<(), Error> {
         // Compress with zstd (level 0 for fast compression)
         let compressed = zstd::encode_all(data, 0)
-            .map_err(|e| Error::Redis(format!("Failed to compress artifact: {}", e)))?;
+            .map_err(|e| Error::Redis(format!("Failed to compress artifact: {e}")))?;
 
         // Store with just the artifact_id as key (as SP1 Cluster expects)
         conn.set::<_, _, ()>(artifact_id, &compressed)
@@ -121,7 +121,7 @@ impl SP1ClusterClient {
         artifact_id: &str,
     ) -> Result<Vec<u8>, Error> {
         // Check if artifact is stored in chunks
-        let chunks_key = format!("{}:chunks", artifact_id);
+        let chunks_key = format!("{artifact_id}:chunks");
         let total_chunks: usize = conn
             .hlen(&chunks_key)
             .await
@@ -139,7 +139,7 @@ impl SP1ClusterClient {
                 let chunk: Vec<u8> = conn
                     .hget(&chunks_key, i)
                     .await
-                    .map_err(|e| Error::Redis(format!("Failed to get chunk {}: {}", i, e)))?;
+                    .map_err(|e| Error::Redis(format!("Failed to get chunk {i}: {e}")))?;
                 chunks.push(chunk);
             }
             chunks.into_iter().flatten().collect()
@@ -147,7 +147,7 @@ impl SP1ClusterClient {
 
         // Decompress with zstd
         let data = zstd::decode_all(compressed.as_slice())
-            .map_err(|e| Error::Redis(format!("Failed to decompress artifact: {}", e)))?;
+            .map_err(|e| Error::Redis(format!("Failed to decompress artifact: {e}")))?;
 
         debug!(
             "Downloaded artifact {} ({} bytes compressed -> {} bytes, chunks: {})",
@@ -167,7 +167,7 @@ impl SP1ClusterClient {
     ) {
         for artifact_id in artifact_ids {
             // Try to delete both the simple key and chunks key
-            let chunks_key = format!("{}:chunks", artifact_id);
+            let chunks_key = format!("{artifact_id}:chunks");
             let _: Result<(), _> = conn.del::<_, ()>(*artifact_id).await;
             let _: Result<(), _> = conn.del::<_, ()>(&chunks_key).await;
         }
@@ -187,7 +187,7 @@ impl SP1ClusterClient {
         // Program needs to be bincode serialized (wrapping the ELF bytes)
         // Use bincode 1.x to match sp1-cluster's bincode version
         let program_serialized = bincode1::serialize(&elf.to_vec())
-            .map_err(|e| Error::Redis(format!("Failed to serialize program: {}", e)))?;
+            .map_err(|e| Error::Redis(format!("Failed to serialize program: {e}")))?;
 
         self.upload_artifact(&mut redis, &program_id, &program_serialized)
             .await?;
@@ -200,7 +200,7 @@ impl SP1ClusterClient {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_millis();
-        let request_id = format!("ere_{}", timestamp);
+        let request_id = format!("ere_{timestamp}");
 
         let deadline = SystemTime::now() + Duration::from_secs(DEFAULT_TIMEOUT_SECS);
 
@@ -284,8 +284,7 @@ impl SP1ClusterClient {
 
                         // Build error message
                         let mut error_msg = format!(
-                            "Proof request {} (status={}) after {:?}",
-                            request_id, status_str, elapsed
+                            "Proof request {request_id} (status={status_str}) after {elapsed:?}"
                         );
 
                         // Add execution details
@@ -294,12 +293,12 @@ impl SP1ClusterClient {
                                 .unwrap_or(ExecutionStatus::Unspecified);
                             let failure_cause = ExecutionFailureCause::try_from(exec.failure_cause)
                                 .unwrap_or(ExecutionFailureCause::Unspecified);
+                            let exec_status_name = exec_status.as_str_name();
+                            let failure_cause_name = failure_cause.as_str_name();
+                            let cycles = exec.cycles;
+                            let gas = exec.gas;
                             error_msg.push_str(&format!(
-                                " - Execution: status={}, failure_cause={}, cycles={}, gas={}",
-                                exec_status.as_str_name(),
-                                failure_cause.as_str_name(),
-                                exec.cycles,
-                                exec.gas
+                                " - Execution: status={exec_status_name}, failure_cause={failure_cause_name}, cycles={cycles}, gas={gas}"
                             ));
                         } else {
                             error_msg.push_str(
@@ -309,7 +308,8 @@ impl SP1ClusterClient {
 
                         // Add metadata if available
                         if !proof_request.metadata.is_empty() {
-                            error_msg.push_str(&format!(" - metadata: {}", proof_request.metadata));
+                            let metadata = &proof_request.metadata;
+                            error_msg.push_str(&format!(" - metadata: {metadata}"));
                         }
 
                         // Cleanup uploaded artifacts before returning error

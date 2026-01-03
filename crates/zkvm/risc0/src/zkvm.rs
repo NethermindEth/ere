@@ -51,9 +51,12 @@ pub struct EreRisc0 {
 
 impl EreRisc0 {
     pub fn new(program: Risc0Program, resource: ProverResourceType) -> Result<Self, Error> {
-        if matches!(resource, ProverResourceType::Network(_)) {
+        if matches!(
+            resource,
+            ProverResourceType::Network(_) | ProverResourceType::Cluster(_)
+        ) {
             panic!(
-                "Network proving not yet implemented for RISC Zero. Use CPU or GPU resource type."
+                "Network/Cluster proving not yet implemented for RISC Zero. Use CPU or GPU resource type."
             );
         }
 
@@ -127,9 +130,9 @@ impl zkVM for EreRisc0 {
                     Rc::new(DefaultProver::new("r0vm-cuda").map_err(Error::InitializeCudaProver)?)
                 }
             }
-            ProverResourceType::Network(_) => {
+            ProverResourceType::Network(_) | ProverResourceType::Cluster(_) => {
                 panic!(
-                    "Network proving not yet implemented for RISC Zero. Use CPU or GPU resource type."
+                    "Network/Cluster proving not yet implemented for RISC Zero. Use CPU or GPU resource type."
                 );
             }
         };
