@@ -67,7 +67,9 @@ echo "Linking ZKM toolchain from: ${TOOLCHAIN_PATH}"
 rustup toolchain link zkm "${TOOLCHAIN_PATH}"
 
 # Step 5: Install cargo-ziren by building from source
-cargo +nightly install --locked --git https://github.com/ProjectZKM/Ziren.git --tag "v${ZIREM_VERSION}" zkm-cli
+# Note: The Dockerfile sets nightly as default, so we don't need +nightly here.
+# Using +nightly can fail if cargo doesn't recognize the toolchain selector syntax.
+cargo install --locked --git https://github.com/ProjectZKM/Ziren.git --tag "v${ZIREM_VERSION}" zkm-cli
 
 # Verify ZKM installation
 echo "Verifying ZKM installation..."
