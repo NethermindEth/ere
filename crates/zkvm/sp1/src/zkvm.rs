@@ -13,10 +13,21 @@ use std::{
 };
 use tracing::info;
 
+pub mod cluster;
 mod error;
 mod sdk;
 
+pub use cluster::SP1ClusterClient;
 pub use error::Error;
+
+/// SP1 Network/Cluster proof mode constants
+/// These match sp1_sdk::network::proto::types::ProofMode enum values
+pub mod proof_mode {
+    pub const CORE: i32 = 1;
+    pub const COMPRESSED: i32 = 2;
+    pub const PLONK: i32 = 3;
+    pub const GROTH16: i32 = 4;
+}
 
 include!(concat!(env!("OUT_DIR"), "/name_and_sdk_version.rs"));
 
@@ -40,7 +51,7 @@ pub struct EreSP1 {
 
 impl EreSP1 {
     pub fn new(program: SP1Program, resource: ProverResourceType) -> Result<Self, Error> {
-        let prover = Prover::new(&resource);
+        let prover = Prover::new(&resource)?;
         let (pk, vk) = prover.setup(&program.elf);
         Ok(Self {
             program,
@@ -57,6 +68,61 @@ impl EreSP1 {
 
     fn prover_mut(&'_ self) -> Result<RwLockWriteGuard<'_, Prover>, Error> {
         self.prover.write().map_err(|_| Error::RwLockPosioned)
+    }
+
+    /// Prove via the cluster
+    fn prove_via_cluster(
+        &self,
+        input: &Input,
+        proof_kind: ProofKind,
+    ) -> anyhow::Result<(PublicValues, Proof, ProgramProvingReport)> {
+        use sp1_sdk::proof::ProofFromNetwork;
+
+        info!("Generating {:?} proof via SP1 Cluster...", proof_kind,);
+
+        let mode = match proof_kind {
+            ProofKind::Compressed => proof_mode::COMPRESSED,
+            ProofKind::Groth16 => proof_mode::GROTH16,
+        };
+
+        // Serialize stdin in SP1 format using bincode 1.x (must match sp1-cluster's bincode version)
+        let mut stdin = SP1Stdin::new();
+        stdin.write_slice(input.stdin());
+        let stdin_bytes = bincode1::serialize(&stdin)
+            .map_err(|e| CommonError::serialize("stdin", "bincode1", e))?;
+
+        // Use the prover's cluster proving method
+        let prover = self.prover()?;
+        let result = prover.prove_cluster(self.program.elf(), &stdin_bytes, mode)?;
+
+        // The proof from cluster is serialized ProofFromNetwork using bincode 1.x
+        let proof_from_network: ProofFromNetwork = bincode1::deserialize(&result.proof)
+            .map_err(|err| CommonError::deserialize("proof", "bincode1", err))?;
+
+        info!(
+            "Received proof from cluster: sp1_version={}, proof_type={:?}",
+            proof_from_network.sp1_version,
+            SP1ProofMode::from(&proof_from_network.proof)
+        );
+
+        let public_values = proof_from_network.public_values.as_slice().to_vec();
+
+        // Re-serialize as SP1ProofWithPublicValues for storage (using bincode 2.x for ere compatibility)
+        let sp1_proof = SP1ProofWithPublicValues {
+            proof: proof_from_network.proof,
+            public_values: proof_from_network.public_values,
+            sp1_version: proof_from_network.sp1_version,
+            tee_proof: None,
+        };
+        let proof_bytes = bincode::serde::encode_to_vec(&sp1_proof, bincode::config::legacy())
+            .map_err(|e| CommonError::serialize("proof", "bincode", e))?;
+        let proof = Proof::new(proof_kind, proof_bytes);
+
+        Ok((
+            public_values,
+            proof,
+            ProgramProvingReport::new(result.proving_time),
+        ))
     }
 }
 
@@ -87,6 +153,11 @@ impl zkVM for EreSP1 {
     ) -> anyhow::Result<(PublicValues, Proof, ProgramProvingReport)> {
         info!("Generating proof…");
 
+        // Handle cluster proving separately
+        if self.prover()?.is_cluster() {
+            return self.prove_via_cluster(input, proof_kind);
+        }
+
         let stdin = input_to_stdin(input)?;
 
         let mode = match proof_kind {
@@ -104,7 +175,8 @@ impl zkVM for EreSP1 {
                     // Note that `take` has to be done explicitly first so the
                     // Moongate container could be removed properly.
                     take(&mut *prover);
-                    *prover = Prover::new(&self.resource);
+                    *prover = Prover::new(&self.resource)
+                        .expect("Failed to recreate prover after panic recovery");
                 }
 
                 Error::Panic(panic_msg(err))
@@ -270,6 +342,26 @@ mod tests {
         };
         let program = basic_program();
         let zkvm = EreSP1::new(program, ProverResourceType::Network(network_config)).unwrap();
+
+        let test_case = BasicProgram::<BincodeLegacy>::valid_test_case();
+        run_zkvm_prove(&zkvm, &test_case);
+    }
+
+    #[test]
+    #[ignore = "Requires SP1_CLUSTER_ENDPOINT environment variable to be set"]
+    fn test_prove_sp1_cluster() {
+        use ere_zkvm_interface::zkvm::ClusterProverConfig;
+
+        // Check if we have the required environment variable
+        if std::env::var("SP1_CLUSTER_ENDPOINT").is_err() {
+            eprintln!("Skipping cluster test: SP1_CLUSTER_ENDPOINT not set");
+            return;
+        }
+
+        // Create a cluster prover configuration
+        let cluster_config = ClusterProverConfig::default();
+        let program = basic_program();
+        let zkvm = EreSP1::new(program, ProverResourceType::Cluster(cluster_config)).unwrap();
 
         let test_case = BasicProgram::<BincodeLegacy>::valid_test_case();
         run_zkvm_prove(&zkvm, &test_case);

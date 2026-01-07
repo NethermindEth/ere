@@ -24,6 +24,55 @@ impl NetworkProverConfig {
     }
 }
 
+/// Configuration for cluster-based proving (e.g., SP1 Cluster)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(feature = "clap", derive(clap::Args))]
+pub struct ClusterProverConfig {
+    #[cfg_attr(
+        feature = "clap",
+        arg(
+            long,
+            env = "SP1_CLUSTER_ENDPOINT",
+            default_value = "http://172.17.0.1:50051/"
+        )
+    )]
+    /// The gRPC endpoint URL of the cluster API service (e.g., http://172.17.0.1:50051)
+    pub endpoint: String,
+
+    #[cfg_attr(
+        feature = "clap",
+        arg(
+            long,
+            env = "SP1_CLUSTER_REDIS_URL",
+            default_value = "redis://:redispassword@172.17.0.1:6379/0"
+        )
+    )]
+    /// Redis URL for artifact storage (e.g., redis://:password@172.17.0.1:6379/0)
+    pub redis_url: String,
+}
+
+impl Default for ClusterProverConfig {
+    fn default() -> Self {
+        Self {
+            endpoint: std::env::var("SP1_CLUSTER_ENDPOINT")
+                .unwrap_or("http://172.17.0.1:50051/".to_string()),
+            redis_url: std::env::var("SP1_CLUSTER_REDIS_URL")
+                .unwrap_or("redis://:redispassword@172.17.0.1:6379/0".to_string()),
+        }
+    }
+}
+
+#[cfg(feature = "clap")]
+impl ClusterProverConfig {
+    pub fn to_args(&self) -> Vec<&str> {
+        core::iter::once(["--endpoint", self.endpoint.as_str()])
+            .chain(core::iter::once(["--redis-url", self.redis_url.as_str()]))
+            .flatten()
+            .collect()
+    }
+}
+
 /// ResourceType specifies what resource will be used to create the proofs.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -34,6 +83,8 @@ pub enum ProverResourceType {
     Gpu,
     /// Use a remote prover network
     Network(NetworkProverConfig),
+    /// Use a multi-GPU cluster (e.g., SP1 Cluster)
+    Cluster(ClusterProverConfig),
 }
 
 #[cfg(feature = "clap")]
@@ -43,6 +94,9 @@ impl ProverResourceType {
             Self::Cpu => vec!["cpu"],
             Self::Gpu => vec!["gpu"],
             Self::Network(config) => core::iter::once("network")
+                .chain(config.to_args())
+                .collect(),
+            Self::Cluster(config) => core::iter::once("cluster")
                 .chain(config.to_args())
                 .collect(),
         }
