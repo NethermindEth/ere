@@ -136,7 +136,9 @@ impl Prover {
 }
 
 fn env_non_empty(name: &str) -> Option<String> {
-    std::env::var(name).ok().filter(|value| !value.trim().is_empty())
+    std::env::var(name)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
 }
 
 fn cfg_or_envs_non_empty(config_value: &str, env_names: &[&str]) -> Option<String> {
@@ -148,10 +150,10 @@ fn cfg_or_envs_non_empty(config_value: &str, env_names: &[&str]) -> Option<Strin
 }
 
 fn build_cluster_client(config: &ClusterProverConfig) -> Result<SP1ClusterClient, Error> {
-    let endpoint =
-        cfg_or_envs_non_empty(&config.endpoint, &["CLUSTER_ENDPOINT"]).ok_or(Error::EndpointNotConfigured)?;
-    let redis_url =
-        cfg_or_envs_non_empty(&config.redis_url, &["CLUSTER_REDIS_URL"]).ok_or(Error::RedisNotConfigured)?;
+    let endpoint = cfg_or_envs_non_empty(&config.endpoint, &["CLUSTER_ENDPOINT"])
+        .ok_or(Error::EndpointNotConfigured)?;
+    let redis_url = cfg_or_envs_non_empty(&config.redis_url, &["CLUSTER_REDIS_URL"])
+        .ok_or(Error::RedisNotConfigured)?;
     SP1ClusterClient::new(&endpoint, &redis_url)
 }
 
