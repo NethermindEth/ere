@@ -29,38 +29,13 @@ impl NetworkProverConfig {
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct ClusterProverConfig {
-    #[cfg_attr(
-        feature = "clap",
-        arg(
-            long,
-            env = "SP1_CLUSTER_ENDPOINT",
-            default_value = "http://172.17.0.1:50051/"
-        )
-    )]
-    /// The gRPC endpoint URL of the cluster API service (e.g., http://172.17.0.1:50051)
+    #[cfg_attr(feature = "clap", arg(long))]
+    /// The gRPC endpoint URL of the cluster API service
     pub endpoint: String,
 
-    #[cfg_attr(
-        feature = "clap",
-        arg(
-            long,
-            env = "SP1_CLUSTER_REDIS_URL",
-            default_value = "redis://:redispassword@172.17.0.1:6379/0"
-        )
-    )]
-    /// Redis URL for artifact storage (e.g., redis://:password@172.17.0.1:6379/0)
+    #[cfg_attr(feature = "clap", arg(long))]
+    /// Redis URL for artifact storage
     pub redis_url: String,
-}
-
-impl Default for ClusterProverConfig {
-    fn default() -> Self {
-        Self {
-            endpoint: std::env::var("SP1_CLUSTER_ENDPOINT")
-                .unwrap_or("http://172.17.0.1:50051/".to_string()),
-            redis_url: std::env::var("SP1_CLUSTER_REDIS_URL")
-                .unwrap_or("redis://:redispassword@172.17.0.1:6379/0".to_string()),
-        }
-    }
 }
 
 #[cfg(feature = "clap")]

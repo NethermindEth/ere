@@ -33,11 +33,13 @@ pub enum Error {
 
     // Cluster-specific errors
     #[error(
-        "SP1 Cluster endpoint not configured. Set SP1_CLUSTER_ENDPOINT environment variable or provide endpoint in ClusterProverConfig"
+        "SP1 Cluster endpoint not configured. Set CLUSTER_ENDPOINT or provide endpoint in ClusterProverConfig"
     )]
     EndpointNotConfigured,
 
-    #[error("Redis URL not configured. Set SP1_CLUSTER_REDIS_URL environment variable")]
+    #[error(
+        "Redis URL not configured. Set CLUSTER_REDIS_URL or provide redis_url in ClusterProverConfig"
+    )]
     RedisNotConfigured,
 
     #[error("Failed to connect to gRPC service: {0}")]

@@ -348,18 +348,28 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Requires SP1_CLUSTER_ENDPOINT environment variable to be set"]
+    #[ignore = "Requires CLUSTER_* environment variables to be set"]
     fn test_prove_sp1_cluster() {
         use ere_zkvm_interface::zkvm::ClusterProverConfig;
 
-        // Check if we have the required environment variable
-        if std::env::var("SP1_CLUSTER_ENDPOINT").is_err() {
-            eprintln!("Skipping cluster test: SP1_CLUSTER_ENDPOINT not set");
+        let endpoint = std::env::var("CLUSTER_ENDPOINT")
+            .ok()
+            .filter(|value| !value.trim().is_empty());
+        let redis_url = std::env::var("CLUSTER_REDIS_URL")
+            .ok()
+            .filter(|value| !value.trim().is_empty());
+
+        // Require both endpoint and Redis URL.
+        if endpoint.is_none() || redis_url.is_none() {
+            eprintln!("Skipping cluster test: CLUSTER_* environment variables not set");
             return;
         }
 
-        // Create a cluster prover configuration
-        let cluster_config = ClusterProverConfig::default();
+        // Use empty config to exercise env resolution in SP1 cluster setup.
+        let cluster_config = ClusterProverConfig {
+            endpoint: String::new(),
+            redis_url: String::new(),
+        };
         let program = basic_program();
         let zkvm = EreSP1::new(program, ProverResourceType::Cluster(cluster_config)).unwrap();
 

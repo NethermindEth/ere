@@ -30,10 +30,10 @@ pub struct SP1ClusterClient {
 impl SP1ClusterClient {
     /// Creates a new SP1 Cluster client
     pub fn new(grpc_endpoint: &str, redis_url: &str) -> Result<Self, Error> {
-        if grpc_endpoint.is_empty() {
+        if grpc_endpoint.trim().is_empty() {
             return Err(Error::EndpointNotConfigured);
         }
-        if redis_url.is_empty() {
+        if redis_url.trim().is_empty() {
             return Err(Error::RedisNotConfigured);
         }
 
