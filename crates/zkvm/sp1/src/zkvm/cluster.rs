@@ -8,12 +8,7 @@ use tonic::transport::Channel;
 use tracing::{debug, info};
 use ulid::Ulid;
 
-// Include the generated protobuf code
-pub mod cluster_proto {
-    tonic::include_proto!("cluster");
-}
-
-use cluster_proto::{
+use sp1_cluster_common::proto::{
     ExecutionFailureCause, ExecutionStatus, ProofRequestCreateRequest, ProofRequestGetRequest,
     ProofRequestStatus, cluster_service_client::ClusterServiceClient,
 };

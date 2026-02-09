@@ -134,6 +134,7 @@ risc0-zkvm-platform = { version = "2.2.1", default-features = false }
 # SP1 dependencies
 sp1-sdk = "5.2.4"
 sp1-zkvm = { version = "5.2.4", default-features = false }
+sp1-cluster-common = { git = "https://github.com/succinctlabs/sp1-cluster", package = "sp1-cluster-common" }
 
 # Ziren dependencies
 zkm-sdk = { git = "https://github.com/ProjectZKM/Ziren.git", tag = "v1.2.3" }
