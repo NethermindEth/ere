@@ -25,7 +25,7 @@ impl NetworkProverConfig {
 }
 
 /// Configuration for cluster-based proving (e.g., SP1 Cluster)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct ClusterProverConfig {
