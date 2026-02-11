@@ -24,6 +24,30 @@ impl NetworkProverConfig {
     }
 }
 
+/// Configuration for cluster-based proving (e.g., SP1 Cluster)
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(feature = "clap", derive(clap::Args))]
+pub struct ClusterProverConfig {
+    #[cfg_attr(feature = "clap", arg(long))]
+    /// The gRPC endpoint URL of the cluster API service
+    pub endpoint: String,
+
+    #[cfg_attr(feature = "clap", arg(long))]
+    /// Redis URL for artifact storage
+    pub redis_url: String,
+}
+
+#[cfg(feature = "clap")]
+impl ClusterProverConfig {
+    pub fn to_args(&self) -> Vec<&str> {
+        core::iter::once(["--endpoint", self.endpoint.as_str()])
+            .chain(core::iter::once(["--redis-url", self.redis_url.as_str()]))
+            .flatten()
+            .collect()
+    }
+}
+
 /// ResourceType specifies what resource will be used to create the proofs.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -34,6 +58,8 @@ pub enum ProverResourceType {
     Gpu,
     /// Use a remote prover network
     Network(NetworkProverConfig),
+    /// Use a multi-GPU cluster (e.g., SP1 Cluster)
+    Cluster(ClusterProverConfig),
 }
 
 #[cfg(feature = "clap")]
@@ -43,6 +69,9 @@ impl ProverResourceType {
             Self::Cpu => vec!["cpu"],
             Self::Gpu => vec!["gpu"],
             Self::Network(config) => core::iter::once("network")
+                .chain(config.to_args())
+                .collect(),
+            Self::Cluster(config) => core::iter::once("cluster")
                 .chain(config.to_args())
                 .collect(),
         }

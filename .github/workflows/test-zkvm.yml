@@ -78,7 +78,7 @@ jobs:
           IMAGE_TAG="$ZKVM_CRATE_VERSION-${GIT_REV:0:7}"
           CACHED_IMAGE_TAG="$ZKVM_CRATE_VERSION-${CACHED_GIT_REV:0:7}"
 
-          IMAGE_REGISTRY="ghcr.io/${{ github.repository }}"
+          IMAGE_REGISTRY="ghcr.io/${GITHUB_REPOSITORY,,}"
           BASE_IMAGE="$IMAGE_REGISTRY/ere-base:$IMAGE_TAG"
           BASE_ZKVM_IMAGE="$IMAGE_REGISTRY/ere-base-${{ inputs.zkvm }}:$IMAGE_TAG"
           COMPILER_ZKVM_IMAGE="$IMAGE_REGISTRY/ere-compiler-${{ inputs.zkvm }}:$IMAGE_TAG"

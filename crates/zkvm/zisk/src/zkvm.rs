@@ -31,8 +31,13 @@ pub struct EreZisk {
 
 impl EreZisk {
     pub fn new(program: ZiskProgram, resource: ProverResourceType) -> Result<Self, Error> {
-        if matches!(resource, ProverResourceType::Network(_)) {
-            panic!("Network proving not yet implemented for ZisK. Use CPU or GPU resource type.");
+        if matches!(
+            resource,
+            ProverResourceType::Network(_) | ProverResourceType::Cluster(_)
+        ) {
+            panic!(
+                "Network/Cluster proving not yet implemented for ZisK. Use CPU or GPU resource type."
+            );
         }
         let sdk = ZiskSdk::new(program.elf, resource, ZiskOptions::from_env())?;
         Ok(Self {

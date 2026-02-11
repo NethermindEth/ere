@@ -41,9 +41,9 @@ impl EreOpenVM {
             ProverResourceType::Gpu => {
                 panic!("Feature `cuda` is disabled. Enable `cuda` to use GPU resource type")
             }
-            ProverResourceType::Network(_) => {
+            ProverResourceType::Network(_) | ProverResourceType::Cluster(_) => {
                 panic!(
-                    "Network proving not yet implemented for OpenVM. Use CPU or GPU resource type."
+                    "Network/Cluster proving not yet implemented for OpenVM. Use CPU or GPU resource type."
                 );
             }
             _ => {}
@@ -172,9 +172,9 @@ impl zkVM for EreOpenVM {
             ProverResourceType::Gpu => {
                 panic!("Feature `cuda` is disabled. Enable `cuda` to use GPU resource type")
             }
-            ProverResourceType::Network(_) => {
+            ProverResourceType::Network(_) | ProverResourceType::Cluster(_) => {
                 panic!(
-                    "Network proving not yet implemented for OpenVM. Use CPU or GPU resource type."
+                    "Network/Cluster proving not yet implemented for OpenVM. Use CPU or GPU resource type."
                 );
             }
         }

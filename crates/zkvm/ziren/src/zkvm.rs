@@ -27,9 +27,13 @@ impl EreZiren {
     pub fn new(program: ZirenProgram, resource: ProverResourceType) -> Result<Self, Error> {
         if matches!(
             resource,
-            ProverResourceType::Gpu | ProverResourceType::Network(_)
+            ProverResourceType::Gpu
+                | ProverResourceType::Network(_)
+                | ProverResourceType::Cluster(_)
         ) {
-            panic!("Network or Gpu proving not yet implemented for ZKM. Use CPU resource type.");
+            panic!(
+                "Network/Cluster/Gpu proving not yet implemented for ZKM. Use CPU resource type."
+            );
         }
         let (pk, vk) = CpuProver::new().setup(program.elf());
         Ok(Self { program, pk, vk })

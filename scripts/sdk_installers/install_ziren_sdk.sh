@@ -33,13 +33,43 @@ ZIREM_VERSION="1.2.3"
 # Step 1: Download and run the script that installs the zkmup binary itself.
 curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/ProjectZKM/toolchain/refs/heads/main/setup.sh | sh
 
-# Step 2: Ensure the installed zkmup script is in PATH
+# Step 2: Source the environment file to ensure zkmup is available
+if [ -f "${HOME}/.zkm-toolchain/env" ]; then
+    . "${HOME}/.zkm-toolchain/env"
+fi
+
+# Step 3: Ensure the installed zkmup script is in PATH (fallback if sourcing didn't work)
 export PATH="${PATH}:${HOME}/.zkm-toolchain/bin"
 
-# Step 3: Link the latest toolchain as toolchain `zkm`
-rustup toolchain link zkm $(ls -d $HOME/.zkm-toolchain/* | grep "$(zkmup list-available | cut -d' ' -f1)$")
-# Step 4: Install cargo-ziren by building from source
-cargo +nightly install --locked --git https://github.com/ProjectZKM/Ziren.git --tag "v${ZIREM_VERSION}" zkm-cli
+# Step 4: Link the latest toolchain as toolchain `zkm`
+# Get the latest available version from zkmup
+LATEST_VERSION=$(zkmup list-available 2>/dev/null | head -1 | cut -d' ' -f1)
+if [ -z "${LATEST_VERSION}" ]; then
+    echo "Error: Failed to get available ZKM toolchain versions from zkmup" >&2
+    exit 1
+fi
+
+# Find the toolchain directory
+TOOLCHAIN_PATH="${HOME}/.zkm-toolchain/${LATEST_VERSION}"
+if [ ! -d "${TOOLCHAIN_PATH}" ]; then
+    # Try to find any installed toolchain
+    TOOLCHAIN_PATH=$(ls -d ${HOME}/.zkm-toolchain/*/ 2>/dev/null | grep -v bin | grep -v env | head -1)
+fi
+
+if [ -z "${TOOLCHAIN_PATH}" ] || [ ! -d "${TOOLCHAIN_PATH}" ]; then
+    echo "Error: Could not find ZKM toolchain directory" >&2
+    echo "Available directories in ~/.zkm-toolchain:" >&2
+    ls -la "${HOME}/.zkm-toolchain/" >&2 || true
+    exit 1
+fi
+
+echo "Linking ZKM toolchain from: ${TOOLCHAIN_PATH}"
+rustup toolchain link zkm "${TOOLCHAIN_PATH}"
+
+# Step 5: Install cargo-ziren by building from source
+# Note: The Dockerfile sets nightly as default, so we don't need +nightly here.
+# Using +nightly can fail if cargo doesn't recognize the toolchain selector syntax.
+cargo install --locked --git https://github.com/ProjectZKM/Ziren.git --tag "v${ZIREM_VERSION}" zkm-cli
 
 # Verify ZKM installation
 echo "Verifying ZKM installation..."

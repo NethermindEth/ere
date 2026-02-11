@@ -15,7 +15,7 @@ strum = { workspace = true, features = ["derive"] }
 thiserror.workspace = true
 
 # Optional dependencies
-clap = { workspace = true, features = ["derive"], optional = true }
+clap = { workspace = true, features = ["derive", "env"], optional = true }
 
 [dev-dependencies]
 bincode = { workspace = true, features = ["alloc", "serde"] }
